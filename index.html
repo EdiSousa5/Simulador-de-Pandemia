@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Pandemia | Projeto de Computação Gráfica</title>
+    <meta name="description"
+        content="Simulação interativa da propagação de uma epidemia num mapa-mundo pontilhado, com contágio por proximidade e transmissão por rotas aéreas. Canvas 2D, JavaScript puro.">
+    <meta name="color-scheme" content="dark">
+    <meta property="og:title" content="Simulador de Pandemia">
+    <meta property="og:description" content="Simulação interativa de propagação epidémica em Canvas 2D.">
+    <meta property="og:type" content="website">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23ef4444'/><circle cx='16' cy='16' r='5' fill='%230b1020'/></svg>">
+    <link rel="preload" href="assets/plane.png" as="image">
+    <link rel="stylesheet" href="src/style.css">
+</head>
+
+<body>
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+        <symbol id="i-menu" viewBox="0 0 24 24">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+        </symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24">
+            <path d="M9 5v14M15 5v14" />
+        </symbol>
+        <symbol id="i-play" viewBox="0 0 24 24">
+            <path d="M7 4.5l12 7.5-12 7.5z" fill="currentColor" stroke-linejoin="round" />
+        </symbol>
+        <symbol id="i-fast" viewBox="0 0 24 24">
+            <path d="M3 5.5l9 6.5-9 6.5zM13 5.5l9 6.5-9 6.5z" fill="currentColor" stroke-linejoin="round" />
+        </symbol>
+        <symbol id="i-reset" viewBox="0 0 24 24">
+            <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1M5 3v4h4" />
+        </symbol>
+        <symbol id="i-plane" viewBox="0 0 24 24">
+            <path d="M21 15.5 3 10V7.5l2 .6 1.2 1.9 4.3 1.3V5.2L12.8 4l2.1 8.1 6.1 1.8z" fill="currentColor"
+                stroke-linejoin="round" />
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M8.5 12h7" />
+        </symbol>
+        <symbol id="i-virus" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="6" />
+            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19" />
+        </symbol>
+    </svg>
+
+    <div id="loader" class="loader">
+        <div class="loader__spinner"></div>
+        <p>A preparar o mundo…</p>
+    </div>
+
+    <header class="topbar">
+        <button id="drawerToggle" class="icon-button" type="button" aria-controls="drawer" aria-expanded="false">
+            <svg class="icon">
+                <use href="#i-menu" />
+            </svg>
+            <span>Controlos</span>
+        </button>
+
+        <h1 class="topbar__title">Simulador de <strong>Pandemia</strong></h1>
+
+        <div class="topbar__right">
+            <div class="clock">
+                <span id="clock" class="clock__date">--/--/----</span>
+                <span id="dayCounter" class="clock__day">Dia 0</span>
+            </div>
+
+            <div class="speed" role="group" aria-label="Velocidade da simulação">
+                <button class="speed__button" type="button" data-speed="0" title="Pausar (Espaço)" aria-label="Pausar">
+                    <svg class="icon">
+                        <use href="#i-pause" />
+                    </svg>
+                </button>
+                <button class="speed__button" type="button" data-speed="1" title="Velocidade normal"
+                    aria-label="Velocidade normal">
+                    <svg class="icon">
+                        <use href="#i-play" />
+                    </svg>
+                </button>
+                <button class="speed__button" type="button" data-speed="4" title="Avanço rápido"
+                    aria-label="Avanço rápido">
+                    <svg class="icon">
+                        <use href="#i-fast" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div id="scrim" class="scrim"></div>
+
+    <aside id="drawer" class="drawer" aria-label="Painel de controlos" aria-hidden="true">
+        <div class="drawer__header">
+            <h2>Controlos</h2>
+            <button id="drawerClose" class="icon-button icon-button--ghost" type="button" aria-label="Fechar painel">
+                <svg class="icon">
+                    <use href="#i-close" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="drawer__body">
+            <section class="panel">
+                <h3 class="panel__title">Probabilidades</h3>
+
+                <div class="field">
+                    <label for="infectionChance">Probabilidade de infeção</label>
+                    <div class="field__row">
+                        <input type="range" id="infectionChance" min="0" max="100" step="1" value="40">
+                        <output id="infectionChanceLabel" for="infectionChance">40%</output>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="deathChance">Probabilidade de morte</label>
+                    <div class="field__row">
+                        <input type="range" id="deathChance" min="0" max="100" step="1" value="8">
+                        <output id="deathChanceLabel" for="deathChance">8%</output>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="cureChance">Probabilidade de cura</label>
+                    <div class="field__row">
+                        <input type="range" id="cureChance" min="0" max="100" step="1" value="20">
+                        <output id="cureChanceLabel" for="cureChance">20%</output>
+                    </div>
+                </div>
+
+                <p class="panel__note">Morte e cura competem na mesma tentativa; a soma nunca ultrapassa 100%.</p>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel__title">Tempos</h3>
+
+                <div class="field">
+                    <label for="infectTime">Intervalo entre contágios</label>
+                    <div class="field__row">
+                        <input type="range" id="infectTime" min="0.5" max="15" step="0.5" value="4">
+                        <output id="infectTimeLabel" for="infectTime">4s</output>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="resolveTime">Tempo até morte ou cura</label>
+                    <div class="field__row">
+                        <input type="range" id="resolveTime" min="1" max="100" step="1" value="40">
+                        <output id="resolveTimeLabel" for="resolveTime">40s</output>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel__title">Tráfego aéreo</h3>
+
+                <div class="field">
+                    <label for="planeCount">Número de aviões</label>
+                    <div class="field__row">
+                        <input type="range" id="planeCount" min="0" max="20" step="1" value="3">
+                        <output id="planeCountLabel" for="planeCount">3</output>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button class="button button--add" type="button" data-mode="add-airport" aria-pressed="false">
+                        <svg class="icon">
+                            <use href="#i-plane" />
+                        </svg>
+                        Adicionar aeroporto
+                    </button>
+                    <button class="button button--remove" type="button" data-mode="remove-airport" aria-pressed="false">
+                        <svg class="icon">
+                            <use href="#i-minus" />
+                        </svg>
+                        Remover aeroporto
+                    </button>
+                </div>
+
+                <p class="panel__note">Um avião que parta de um aeroporto contaminado leva o vírus para o destino.</p>
+            </section>
+        </div>
+
+        <div class="drawer__footer">
+            <button id="resetButton" class="button button--reset" type="button">
+                <svg class="icon">
+                    <use href="#i-reset" />
+                </svg>
+                Reiniciar simulação
+            </button>
+        </div>
+    </aside>
+
+    <main class="stage">
+        <div class="stage__canvas-wrap">
+            <canvas id="worldCanvas" data-mode="infect" width="1024" height="580"
+                aria-label="Mapa-mundo com a população e as rotas aéreas"></canvas>
+            <p id="hint" class="hint">
+                <svg class="icon">
+                    <use href="#i-virus" />
+                </svg>
+                Clique no mapa para iniciar o surto
+            </p>
+        </div>
+
+        <section class="legend" aria-label="Legenda">
+            <span class="legend__item"><i class="dot dot--healthy"></i>Saudáveis</span>
+            <span class="legend__item"><i class="dot dot--infected"></i>Infetadas</span>
+            <span class="legend__item"><i class="dot dot--cured"></i>Curadas</span>
+            <span class="legend__item"><i class="dot dot--dead"></i>Mortas</span>
+            <span class="legend__item"><i class="dot dot--airport"></i>Aeroporto</span>
+            <span class="legend__item"><i class="dot dot--airport-infected"></i>Aeroporto contaminado</span>
+        </section>
+    </main>
+
+    <footer class="stats" aria-label="Estatísticas da população">
+        <div class="stats__bar">
+            <span id="barHealthy" class="stats__segment stats__segment--healthy"></span>
+            <span id="barInfected" class="stats__segment stats__segment--infected"></span>
+            <span id="barCured" class="stats__segment stats__segment--cured"></span>
+            <span id="barDead" class="stats__segment stats__segment--dead"></span>
+        </div>
+
+        <dl class="stats__grid">
+            <div class="stat stat--healthy">
+                <dt>Saudáveis</dt>
+                <dd id="statHealthy">100.0%</dd>
+            </div>
+            <div class="stat stat--infected">
+                <dt>Infetadas</dt>
+                <dd id="statInfected">0.0%</dd>
+            </div>
+            <div class="stat stat--cured">
+                <dt>Curadas</dt>
+                <dd id="statCured">0.0%</dd>
+            </div>
+            <div class="stat stat--dead">
+                <dt>Mortas</dt>
+                <dd id="statDead">0.0%</dd>
+            </div>
+            <div class="stat stat--total">
+                <dt>População</dt>
+                <dd id="populationTotal">0</dd>
+            </div>
+        </dl>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="src/world-points.js"></script>
+    <script src="src/app.js"></script>
+</body>
+
+</html>

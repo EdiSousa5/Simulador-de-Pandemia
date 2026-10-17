@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Imagem para pontos | Ferramenta</title>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background: #0b1020;
+            color: #e8edf5;
+        }
+
+        h1 {
+            font-size: 1.1rem;
+            margin: 0 0 4px;
+        }
+
+        p {
+            margin: 0 0 20px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            max-width: 70ch;
+            line-height: 1.6;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        input,
+        button {
+            font: inherit;
+            font-size: 0.85rem;
+            padding: 7px 10px;
+            color: #e8edf5;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+        }
+
+        input[type="number"] {
+            width: 90px;
+        }
+
+        button {
+            cursor: pointer;
+            background: #38bdf8;
+            color: #042234;
+            border-color: transparent;
+            font-weight: 600;
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        canvas {
+            display: block;
+            max-width: 100%;
+            background: #05070e;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+
+        #status {
+            font-size: 0.85rem;
+            color: #38bdf8;
+            min-height: 1.4em;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Imagem &rarr; lista de pontos</h1>
+    <p>
+        Gera o ficheiro <code>src/world-points.js</code> a partir de um mapa-mundo. Carregue uma imagem de
+        1024&times;580 com os continentes a branco sobre fundo escuro &mdash; use um mapa de domínio público
+        (por exemplo, Natural Earth) e não uma imagem de banco de imagens licenciada. A imagem nunca sai do
+        seu browser.
+    </p>
+
+    <div class="controls">
+        <div>
+            <label for="fileInput">Imagem de origem</label>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+        <div>
+            <label for="spacing">Espaçamento da grelha</label>
+            <input type="number" id="spacing" value="6" min="2" max="20">
+        </div>
+        <div>
+            <label for="threshold">Limiar de luminosidade</label>
+            <input type="number" id="threshold" value="200" min="0" max="255">
+        </div>
+        <button id="copyButton" type="button" disabled>Copiar código gerado</button>
+    </div>
+
+    <canvas id="preview" width="1024" height="580"></canvas>
+    <p id="status"></p>
+
+    <script>
+        const fileInput = document.getElementById("fileInput");
+        const spacingInput = document.getElementById("spacing");
+        const thresholdInput = document.getElementById("threshold");
+        const copyButton = document.getElementById("copyButton");
+        const preview = document.getElementById("preview");
+        const previewCtx = preview.getContext("2d");
+        const status = document.getElementById("status");
+
+        const work = document.createElement("canvas");
+        const workCtx = work.getContext("2d", { willReadFrequently: true });
+
+        let sourceImage = null;
+        let points = [];
+
+        fileInput.addEventListener("change", () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            const image = new Image();
+            image.onload = () => {
+                URL.revokeObjectURL(url);
+                sourceImage = image;
+                analyze();
+            };
+            image.src = url;
+        });
+
+        spacingInput.addEventListener("change", analyze);
+        thresholdInput.addEventListener("change", analyze);
+
+        function analyze() {
+            if (!sourceImage) return;
+
+            const spacing = Math.max(2, Number(spacingInput.value) || 6);
+            const threshold = Number(thresholdInput.value) || 200;
+
+            work.width = preview.width;
+            work.height = preview.height;
+            workCtx.clearRect(0, 0, work.width, work.height);
+            workCtx.drawImage(sourceImage, 0, 0, work.width, work.height);
+
+            const { data } = workCtx.getImageData(0, 0, work.width, work.height);
+            points = [];
+
+            // Amostragem directa na grelha: um ponto por célula, se o pixel central for claro.
+            for (let y = 0; y < work.height; y += spacing) {
+                for (let x = 0; x < work.width; x += spacing) {
+                    const i = (y * work.width + x) * 4;
+                    if (data[i + 3] < 128) continue;
+                    if (data[i] > threshold && data[i + 1] > threshold && data[i + 2] > threshold) {
+                        points.push({ x, y });
+                    }
+                }
+            }
+
+            draw();
+            copyButton.disabled = points.length === 0;
+            status.textContent = points.length.toLocaleString("pt-PT") + " pontos gerados.";
+        }
+
+        function draw() {
+            previewCtx.clearRect(0, 0, preview.width, preview.height);
+            previewCtx.fillStyle = "#e8edf5";
+            previewCtx.beginPath();
+            for (const point of points) {
+                previewCtx.moveTo(point.x + 2.5, point.y);
+                previewCtx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+            }
+            previewCtx.fill();
+        }
+
+        copyButton.addEventListener("click", async () => {
+            const body = points.map((p) => `  { x: ${p.x}, y: ${p.y} },`).join("\n");
+            const code = "const WORLD_POINTS = [\n" + body + "\n];\n";
+            try {
+                await navigator.clipboard.writeText(code);
+                status.textContent = "Código copiado para a área de transferência.";
+            } catch {
+                status.textContent = "Não foi possível copiar automaticamente; veja a consola.";
+                console.log(code);
+            }
+        });
+    </script>
+</body>
+
+</html>
